@@ -2,231 +2,261 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>台南市積淹水點位地圖</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Microsoft JhengHei','Noto Sans TC',sans-serif; background:#0f172a; color:#e2e8f0; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
-
-#header {
-  background:linear-gradient(135deg,#0f172a,#1e3a5f);
-  padding:10px 20px; display:flex; align-items:center; justify-content:space-between;
-  border-bottom:1px solid #1e40af44; flex-shrink:0; gap:12px; flex-wrap:wrap;
+:root {
+  --bg0: #0a1628;
+  --bg1: #0f1e35;
+  --bg2: #1a2d4a;
+  --border: #1e3a5f;
+  --accent: #3b82f6;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --panel-w: 270px;
+  --header-h: 54px;
+  --ctrl-h: 40px;
 }
-#header h1 { font-size:16px; font-weight:700; color:#93c5fd; white-space:nowrap; }
-#header .sub { font-size:11px; color:#64748b; margin-top:2px; }
-#legend { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-.li { display:flex; align-items:center; gap:5px; font-size:11px; color:#94a3b8; white-space:nowrap; }
-.ld { width:12px; height:12px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.3); flex-shrink:0; }
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { height:100%; overflow:hidden; font-family:'Microsoft JhengHei','Noto Sans TC',sans-serif; background:var(--bg0); color:var(--text); }
 
-#controls {
-  background:#0f1e35; padding:6px 16px;
-  display:flex; gap:8px; align-items:center; flex-wrap:wrap;
-  flex-shrink:0; border-bottom:1px solid #1e3a5f;
+/* ── Layout ── */
+#app { display:flex; flex-direction:column; height:100vh; height:100dvh; }
+#header { flex-shrink:0; height:var(--header-h); background:linear-gradient(135deg,#0a1628,#1a3355); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 14px; gap:10px; }
+#header h1 { font-size:15px; font-weight:700; color:#93c5fd; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#menu-btn { display:none; background:none; border:1px solid var(--border); border-radius:6px; color:#93c5fd; padding:5px 9px; cursor:pointer; font-size:15px; flex-shrink:0; }
+
+#body { flex:1; display:flex; overflow:hidden; position:relative; }
+#sidebar {
+  width:var(--panel-w); flex-shrink:0;
+  background:var(--bg1); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; overflow:hidden;
+  transition:transform .25s ease;
 }
-.ctrl-label { font-size:11px; color:#64748b; white-space:nowrap; }
-.sep { width:1px; height:20px; background:#1e3a5f; margin:0 4px; }
+#map-wrap { flex:1; position:relative; overflow:hidden; }
+#map { width:100%; height:100%; }
+
+/* ── Sidebar ── */
+#ctrl-strip {
+  padding:8px 12px; border-bottom:1px solid var(--border);
+  display:flex; flex-wrap:wrap; gap:5px;
+}
 .tbtn {
-  padding:3px 10px; border-radius:4px; border:1px solid #1e40af66;
-  background:#1e3a5f; color:#93c5fd; font-size:11px; cursor:pointer;
-  transition:all 0.15s; user-select:none; white-space:nowrap;
+  padding:3px 9px; border-radius:4px; border:1px solid #1e40af66;
+  background:var(--bg2); color:#93c5fd; font-size:11px; cursor:pointer;
+  transition:all .15s; user-select:none; white-space:nowrap;
 }
 .tbtn.on { background:#2563eb; border-color:#3b82f6; color:#fff; }
 .tbtn:hover { background:#1d4ed8; color:#fff; }
 
-#map { flex:1; position:relative; }
+#panels { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
+#panels::-webkit-scrollbar { width:4px; }
+#panels::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
 
-/* ── Filter Panel ── */
-#filter-panel {
-  position:fixed; left:16px; top:130px; width:260px;
-  background:rgba(10,18,36,0.97); border:1px solid #1e40af55;
-  border-radius:12px; z-index:9999; backdrop-filter:blur(10px);
-  box-shadow:0 8px 32px rgba(0,0,0,0.5); overflow:hidden;
-}
-.fp-header {
-  background:rgba(30,58,96,0.8); padding:8px 14px;
+.panel { background:var(--bg0); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.panel-head {
+  background:var(--bg2); padding:8px 12px;
   display:flex; align-items:center; justify-content:space-between;
   cursor:pointer; user-select:none;
 }
-.fp-header h4 { font-size:12px; font-weight:700; color:#93c5fd; }
-.fp-toggle { color:#64748b; font-size:12px; }
-.fp-body { padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
-.fp-section { display:flex; flex-direction:column; gap:6px; }
-.fp-section-title {
-  font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase;
-  letter-spacing:0.05em; border-bottom:1px solid #1e3a5f; padding-bottom:4px;
-  display:flex; align-items:center; justify-content:space-between;
-}
-.fp-count { background:#1e3a5f; color:#93c5fd; font-size:10px; padding:1px 6px; border-radius:8px; }
+.panel-head h4 { font-size:12px; font-weight:700; color:#93c5fd; }
+.badge-count { background:#1e3a5f; color:#93c5fd; font-size:10px; padding:1px 7px; border-radius:8px; font-weight:700; }
+.panel-body { padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+.panel-body.hidden { display:none; }
 
-/* Select row */
 .sel-row { display:flex; gap:6px; align-items:center; }
-.sel-row label { font-size:11px; color:#94a3b8; min-width:40px; }
+.sel-row label { font-size:11px; color:var(--muted); min-width:36px; flex-shrink:0; }
 select {
-  flex:1; background:#0f172a; color:#cbd5e1; border:1px solid #1e3a5f;
-  border-radius:5px; padding:3px 6px; font-size:11px; cursor:pointer;
-  outline:none;
+  flex:1; background:var(--bg1); color:var(--text); border:1px solid var(--border);
+  border-radius:5px; padding:4px 6px; font-size:11px; cursor:pointer; outline:none;
+  -webkit-appearance:none;
 }
-select:focus { border-color:#3b82f6; }
+select:focus { border-color:var(--accent); }
 
-/* Checkbox list for move stations */
-.cb-list { display:flex; flex-direction:column; gap:4px; max-height:180px; overflow-y:auto; }
-.cb-list::-webkit-scrollbar { width:4px; }
-.cb-list::-webkit-scrollbar-track { background:#0f172a; }
-.cb-list::-webkit-scrollbar-thumb { background:#1e3a5f; border-radius:2px; }
-.cb-item {
-  display:flex; align-items:center; gap:7px; font-size:11px; color:#94a3b8;
-  cursor:pointer; padding:2px 4px; border-radius:4px; transition:background 0.1s;
-}
-.cb-item:hover { background:#1e3a5f44; color:#cbd5e1; }
-.cb-item input { accent-color:#fb923c; cursor:pointer; }
+.cb-list { display:flex; flex-direction:column; gap:3px; }
+.cb-item { display:flex; align-items:center; gap:7px; font-size:11px; color:#94a3b8; cursor:pointer; padding:3px 4px; border-radius:4px; }
+.cb-item:hover { background:var(--bg2); color:var(--text); }
+.cb-item input { accent-color:#fb923c; cursor:pointer; flex-shrink:0; }
 
-/* Action buttons */
-.fp-actions { display:flex; gap:6px; }
+.action-row { display:flex; gap:6px; }
 .fp-btn {
-  flex:1; padding:5px; border-radius:6px; border:none; font-size:11px;
-  cursor:pointer; font-weight:600; transition:all 0.15s;
+  flex:1; padding:5px 8px; border-radius:6px; border:none; font-size:11px;
+  cursor:pointer; font-weight:600; transition:all .15s; text-align:center;
 }
 .fp-btn.zoom { background:#1d4ed8; color:#fff; }
 .fp-btn.zoom:hover { background:#2563eb; }
-.fp-btn.reset { background:#1e3a5f; color:#93c5fd; border:1px solid #1e40af66; }
-.fp-btn.reset:hover { background:#2d5a8e; }
+.fp-btn.reset { background:var(--bg2); color:#93c5fd; border:1px solid var(--border); }
+.fp-btn.reset:hover { background:var(--border); }
 
-/* Info popup */
-.info-popup {
-  position:fixed; right:16px; top:130px; width:285px;
-  background:rgba(10,20,40,0.97); border:1px solid #1e40af;
-  border-radius:10px; padding:14px; font-size:12px; display:none;
-  z-index:9999; box-shadow:0 8px 32px rgba(0,0,0,0.5); backdrop-filter:blur(8px);
+.divider { height:1px; background:var(--border); margin:2px 0; }
+
+/* ── Legend (inside sidebar bottom) ── */
+#legend {
+  padding:10px 12px; border-top:1px solid var(--border);
+  display:flex; flex-wrap:wrap; gap:5px 12px; flex-shrink:0;
 }
-.info-popup h3 { color:#60a5fa; font-size:14px; margin-bottom:10px; padding-right:20px; line-height:1.3; }
-.info-popup .close { position:absolute; top:10px; right:12px; cursor:pointer; color:#475569; font-size:15px; border:none; background:none; }
-.info-row { display:flex; gap:6px; margin-bottom:5px; line-height:1.4; }
-.info-lbl { color:#64748b; min-width:65px; flex-shrink:0; }
+.li { display:flex; align-items:center; gap:4px; font-size:10px; color:#94a3b8; }
+.ld { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+/* ── Map overlays ── */
+#fab {
+  display:none; position:absolute; bottom:80px; right:16px; z-index:900;
+  background:#2563eb; border:none; border-radius:50%; width:44px; height:44px;
+  color:#fff; font-size:18px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.5);
+  align-items:center; justify-content:center;
+}
+
+#info-card {
+  position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
+  width:calc(100% - 32px); max-width:400px;
+  background:rgba(10,20,40,0.97); border:1px solid var(--accent);
+  border-radius:12px; padding:14px; font-size:12px; display:none;
+  z-index:800; box-shadow:0 8px 32px rgba(0,0,0,0.6);
+  backdrop-filter:blur(10px);
+}
+#info-card h3 { color:#60a5fa; font-size:14px; margin-bottom:8px; padding-right:22px; line-height:1.3; }
+.close-card { position:absolute; top:10px; right:12px; cursor:pointer; color:var(--muted); font-size:16px; background:none; border:none; }
+.info-row { display:flex; gap:6px; margin-bottom:4px; line-height:1.4; }
+.info-lbl { color:var(--muted); min-width:60px; flex-shrink:0; }
 .info-val { color:#cbd5e1; }
-.badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:700; border:1px solid; }
+.ibadge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:700; border:1px solid; }
 
-#stats {
-  position:fixed; right:16px; bottom:24px;
-  background:rgba(10,20,40,0.93); border:1px solid #1e3a5f;
-  border-radius:10px; padding:8px 14px; font-size:11px;
-  z-index:999; backdrop-filter:blur(6px);
-  display:flex; flex-wrap:wrap; gap:5px 12px; max-width:360px;
+/* ── Leaflet overrides ── */
+.leaflet-control-zoom { border:1px solid var(--border) !important; }
+.leaflet-control-zoom a { background:var(--bg0) !important; color:#93c5fd !important; border-color:var(--border) !important; }
+.leaflet-control-zoom a:hover { background:var(--bg2) !important; }
+.leaflet-control-attribution { background:rgba(10,20,40,.7) !important; color:var(--muted) !important; font-size:10px !important; }
+
+/* ── RWD: Mobile ── */
+@media (max-width: 700px) {
+  :root { --header-h:48px; }
+  #menu-btn { display:flex; align-items:center; justify-content:center; }
+  #header h1 { font-size:13px; }
+  #sidebar {
+    position:absolute; top:0; left:0; height:100%; z-index:1100;
+    transform:translateX(-100%);
+    box-shadow:4px 0 20px rgba(0,0,0,0.6);
+  }
+  #sidebar.open { transform:translateX(0); }
+  #overlay {
+    display:none; position:absolute; inset:0; background:rgba(0,0,0,0.5);
+    z-index:1099; backdrop-filter:blur(2px);
+  }
+  #overlay.show { display:block; }
+  #fab { display:flex; }
+  #info-card { bottom:80px; }
+  .leaflet-control-zoom { display:none; }
 }
-.sv { display:flex; align-items:center; gap:5px; color:#94a3b8; }
-.sd { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
-.sn { color:#e2e8f0; font-weight:700; margin-left:2px; }
-
-.leaflet-control-zoom { border:1px solid #1e3a5f !important; }
-.leaflet-control-zoom a { background:#0f172a !important; color:#93c5fd !important; border-color:#1e3a5f !important; }
-.leaflet-control-zoom a:hover { background:#1e3a5f !important; }
-.leaflet-control-attribution { background:rgba(10,20,40,0.8) !important; color:#475569 !important; font-size:10px !important; }
+@media (min-width:701px) {
+  #overlay { display:none !important; }
+}
 </style>
 </head>
 <body>
+<div id="app">
 
-<div id="header">
-  <div>
-    <h1>🌊 台南市 108–114年度 積淹水點位地圖</h1>
-    <div class="sub">200 積淹水點・53 建議新設測站・8 建議移設測站</div>
+  <div id="header">
+    <button id="menu-btn" onclick="toggleSidebar()" aria-label="選單">☰</button>
+    <h1>🌊 台南市積淹水點位地圖</h1>
   </div>
-  <div id="legend">
-    <div class="li"><div class="ld" style="background:#ef4444"></div>一級</div>
-    <div class="li"><div class="ld" style="background:#f97316"></div>二級</div>
-    <div class="li"><div class="ld" style="background:#eab308"></div>三級</div>
-    <div class="li"><div class="ld" style="background:#22c55e"></div>四級</div>
-    <div class="li"><div class="ld" style="background:#a855f7"></div>非工措施</div>
-    <div class="li"><div class="ld" style="background:#38bdf8;border-radius:2px"></div>▲ 新設</div>
-    <div class="li"><div class="ld" style="background:#fb923c;border-radius:2px"></div>◆ 移設</div>
-  </div>
-</div>
 
-<div id="controls">
-  <span class="ctrl-label">積淹水：</span>
-  <button class="tbtn on" id="b-l1" onclick="tog('l1')">一級</button>
-  <button class="tbtn on" id="b-l2" onclick="tog('l2')">二級</button>
-  <button class="tbtn on" id="b-l3" onclick="tog('l3')">三級</button>
-  <button class="tbtn on" id="b-l4" onclick="tog('l4')">四級</button>
-  <button class="tbtn on" id="b-lx" onclick="tog('lx')">非工措施</button>
-  <div class="sep"></div>
-  <button class="tbtn on" id="b-new" onclick="tog('new')">新設測站</button>
-  <button class="tbtn on" id="b-mov" onclick="tog('mov')">移設測站</button>
-  <div class="sep"></div>
-  <button class="tbtn on" id="b-buf" onclick="togBuf()">500m</button>
-  <button class="tbtn on" id="b-lbl" onclick="togLabels()">標籤</button>
-</div>
-
-<div id="map"></div>
-
-<!-- Filter Panel -->
-<div id="filter-panel">
-  <div class="fp-header" onclick="toggleFP()">
-    <h4>🔍 測站篩選 &amp; Zoom</h4>
-    <span class="fp-toggle" id="fp-arrow">▼</span>
-  </div>
-  <div class="fp-body" id="fp-body">
-
-    <!-- New station filters -->
-    <div class="fp-section">
-      <div class="fp-section-title">
-        <span>▲ 建議新設測站</span>
-        <span class="fp-count" id="new-count">53</span>
+  <div id="body">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <!-- Layer toggles -->
+      <div id="ctrl-strip">
+        <span style="font-size:10px;color:var(--muted);width:100%;margin-bottom:2px">積淹水等級</span>
+        <button class="tbtn on" id="b-l1" onclick="tog('l1')">一級</button>
+        <button class="tbtn on" id="b-l2" onclick="tog('l2')">二級</button>
+        <button class="tbtn on" id="b-l3" onclick="tog('l3')">三級</button>
+        <button class="tbtn on" id="b-l4" onclick="tog('l4')">四級</button>
+        <button class="tbtn on" id="b-lx" onclick="tog('lx')">非工措施</button>
+        <div style="width:100%;height:1px;background:var(--border);margin:2px 0"></div>
+        <span style="font-size:10px;color:var(--muted);width:100%;margin-bottom:2px">顯示選項</span>
+        <button class="tbtn on" id="b-new" onclick="tog('new')">新設</button>
+        <button class="tbtn on" id="b-mov" onclick="tog('mov')">移設</button>
+        <button class="tbtn on" id="b-buf" onclick="togBuf()">500m</button>
+        <button class="tbtn on" id="b-lbl" onclick="togLabels()">標籤</button>
       </div>
-      <div class="sel-row">
-        <label>行政區</label>
-        <select id="sel-new-dist" onchange="filterNew()">
-          <option value="">全部</option>
-          <option value="中西區">中西區</option><option value="仁德區">仁德區</option><option value="佳里區">佳里區</option><option value="北區">北區</option><option value="南區">南區</option><option value="善化區">善化區</option><option value="大內區">大內區</option><option value="學甲區">學甲區</option><option value="安南區">安南區</option><option value="新市區">新市區</option><option value="新營區">新營區</option><option value="東區">東區</option><option value="楠西區">楠西區</option><option value="永康區">永康區</option><option value="麻豆區">麻豆區</option>
-        </select>
+
+      <!-- Panels -->
+      <div id="panels">
+
+        <!-- New station filter -->
+        <div class="panel">
+          <div class="panel-head" onclick="togglePanel('p-new')">
+            <h4>▲ 建議新設測站</h4>
+            <span class="badge-count" id="new-count">53</span>
+          </div>
+          <div class="panel-body" id="p-new">
+            <div class="sel-row">
+              <label>行政區</label>
+              <select id="sel-new-dist" onchange="filterNew()">
+                <option value="">全部</option>
+                <option value="中西區">中西區</option><option value="仁德區">仁德區</option><option value="佳里區">佳里區</option><option value="北區">北區</option><option value="南區">南區</option><option value="善化區">善化區</option><option value="大內區">大內區</option><option value="學甲區">學甲區</option><option value="安南區">安南區</option><option value="新市區">新市區</option><option value="新營區">新營區</option><option value="東區">東區</option><option value="楠西區">楠西區</option><option value="永康區">永康區</option><option value="麻豆區">麻豆區</option>
+              </select>
+            </div>
+            <div class="sel-row">
+              <label>科室</label>
+              <select id="sel-new-dept" onchange="filterNew()">
+                <option value="">全部</option>
+                <option value="團隊規劃">團隊規劃</option><option value="水利行政科">水利行政科</option><option value="水工科">水工科</option><option value="水養科">水養科</option><option value="雨水下水道管理科">雨水下水道管理科</option>
+              </select>
+            </div>
+            <div class="action-row">
+              <button class="fp-btn zoom" onclick="zoomNew()">📍 Zoom In</button>
+              <button class="fp-btn reset" onclick="resetNew()">↺ 重設</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Move station filter -->
+        <div class="panel">
+          <div class="panel-head" onclick="togglePanel('p-mov')">
+            <h4>◆ 建議移設測站</h4>
+            <span class="badge-count" id="mov-count">8</span>
+          </div>
+          <div class="panel-body" id="p-mov">
+            <div class="cb-list" id="cb-mov"><label class="cb-item"><input type="checkbox" value="仁德區-正07" onchange="filterMov()" checked><span>仁德區-正07</span></label><label class="cb-item"><input type="checkbox" value="永康區-正01" onchange="filterMov()" checked><span>永康區-正01</span></label><label class="cb-item"><input type="checkbox" value="安南區-正36" onchange="filterMov()" checked><span>安南區-正36</span></label><label class="cb-item"><input type="checkbox" value="中西區-正04" onchange="filterMov()" checked><span>中西區-正04</span></label><label class="cb-item"><input type="checkbox" value="安平區-正02" onchange="filterMov()" checked><span>安平區-正02</span></label><label class="cb-item"><input type="checkbox" value="安平區-正01" onchange="filterMov()" checked><span>安平區-正01</span></label><label class="cb-item"><input type="checkbox" value="新化區-正01" onchange="filterMov()" checked><span>新化區-正01</span></label><label class="cb-item"><input type="checkbox" value="鹽水區-正02" onchange="filterMov()" checked><span>鹽水區-正02</span></label></div>
+            <div class="action-row">
+              <button class="fp-btn zoom" onclick="zoomMov()">📍 Zoom In</button>
+              <button class="fp-btn reset" onclick="resetMov()">↺ 全選</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /panels -->
+
+      <!-- Legend -->
+      <div id="legend">
+        <div class="li"><div class="ld" style="background:#ef4444"></div>一級</div>
+        <div class="li"><div class="ld" style="background:#f97316"></div>二級</div>
+        <div class="li"><div class="ld" style="background:#eab308"></div>三級</div>
+        <div class="li"><div class="ld" style="background:#22c55e"></div>四級</div>
+        <div class="li"><div class="ld" style="background:#a855f7"></div>非工措施</div>
+        <div class="li"><div class="ld" style="background:#38bdf8;border-radius:2px"></div>新設</div>
+        <div class="li"><div class="ld" style="background:#fb923c;border-radius:2px"></div>移設</div>
       </div>
-      <div class="sel-row">
-        <label>科室</label>
-        <select id="sel-new-dept" onchange="filterNew()">
-          <option value="">全部</option>
-          <option value="團隊規劃">團隊規劃</option><option value="水利行政科">水利行政科</option><option value="水工科">水工科</option><option value="水養科">水養科</option><option value="雨水下水道管理科">雨水下水道管理科</option>
-        </select>
-      </div>
-      <div class="fp-actions">
-        <button class="fp-btn zoom" onclick="zoomNew()">📍 Zoom In</button>
-        <button class="fp-btn reset" onclick="resetNew()">↺ 重設</button>
+    </div><!-- /sidebar -->
+
+    <!-- Overlay (mobile) -->
+    <div id="overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Map -->
+    <div id="map-wrap">
+      <div id="map"></div>
+      <!-- FAB (mobile) -->
+      <button id="fab" onclick="toggleSidebar()" aria-label="篩選">⚙</button>
+      <!-- Info card -->
+      <div id="info-card">
+        <button class="close-card" onclick="closeInfo()">✕</button>
+        <h3 id="ic-title"></h3>
+        <div id="ic-body"></div>
       </div>
     </div>
-
-    <!-- Move station filters -->
-    <div class="fp-section">
-      <div class="fp-section-title">
-        <span>◆ 建議移設測站</span>
-        <span class="fp-count" id="mov-count">8</span>
-      </div>
-      <div class="cb-list" id="cb-mov">
-        <label class="cb-item"><input type="checkbox" value="仁德區-正07" onchange="filterMov()" checked> 仁德區-正07</label><label class="cb-item"><input type="checkbox" value="永康區-正01" onchange="filterMov()" checked> 永康區-正01</label><label class="cb-item"><input type="checkbox" value="安南區-正36" onchange="filterMov()" checked> 安南區-正36</label><label class="cb-item"><input type="checkbox" value="中西區-正04" onchange="filterMov()" checked> 中西區-正04</label><label class="cb-item"><input type="checkbox" value="安平區-正02" onchange="filterMov()" checked> 安平區-正02</label><label class="cb-item"><input type="checkbox" value="安平區-正01" onchange="filterMov()" checked> 安平區-正01</label><label class="cb-item"><input type="checkbox" value="新化區-正01" onchange="filterMov()" checked> 新化區-正01</label><label class="cb-item"><input type="checkbox" value="鹽水區-正02" onchange="filterMov()" checked> 鹽水區-正02</label>
-      </div>
-      <div class="fp-actions">
-        <button class="fp-btn zoom" onclick="zoomMov()">📍 Zoom In</button>
-        <button class="fp-btn reset" onclick="resetMov()">↺ 全選</button>
-      </div>
-    </div>
-
   </div>
-</div>
-
-<!-- Info popup -->
-<div class="info-popup" id="ipanel">
-  <button class="close" onclick="document.getElementById('ipanel').style.display='none'">✕</button>
-  <h3 id="ititle"></h3>
-  <div id="ibody"></div>
-</div>
-
-<div id="stats">
-  <div class="sv"><div class="sd" style="background:#ef4444"></div>一級 <span class="sn">18</span></div>
-  <div class="sv"><div class="sd" style="background:#f97316"></div>二級 <span class="sn">25</span></div>
-  <div class="sv"><div class="sd" style="background:#eab308"></div>三級 <span class="sn">98</span></div>
-  <div class="sv"><div class="sd" style="background:#22c55e"></div>四級 <span class="sn">43</span></div>
-  <div class="sv"><div class="sd" style="background:#a855f7"></div>非工 <span class="sn">16</span></div>
-  <div class="sv"><div class="sd" style="background:#38bdf8;border-radius:2px"></div>新設 <span class="sn" id="stat-new">53</span></div>
-  <div class="sv"><div class="sd" style="background:#fb923c;border-radius:2px"></div>移設 <span class="sn" id="stat-mov">8</span></div>
 </div>
 
 <script>
@@ -234,227 +264,185 @@ const FLOOD = [{"no":"1","district":"後壁區","name":"菁寮及菁豐社區","
 const NEW_ST = [{"no":"1","dept":"水工科","district":"麻豆區","address":"新生南路218巷","x":120.240095,"y":23.180112,"manhole":"2154274-R02","reason":"NK幹線瓶頸(新生南路積淹)"},{"no":"2","dept":"水工科","district":"麻豆區","address":"19甲崎頂橋","x":120.2627296,"y":23.19449031,"manhole":"2184276-G01","reason":"A幹線出口(總爺派出所積淹)"},{"no":"3","dept":"水工科","district":"麻豆區","address":"總爺派出所旁嘉南大圳","x":120.2666149,"y":23.18427828,"manhole":"2184274-007","reason":"A幹線出口(總爺派出所積淹)"},{"no":"4","dept":"水工科","district":"麻豆區","address":"南57排入東北勢排水","x":120.242724,"y":23.196338,"manhole":"2154277-R01","reason":"C支線出口(南57及新生北路積淹)"},{"no":"5","dept":"水工科","district":"麻豆區","address":"南49排入麻豆排水","x":120.219975,"y":23.203073,"manhole":"2124278-F04","reason":"G幹線出口(南49積淹)"},{"no":"6","dept":"團隊規劃","district":"麻豆區","address":"苓子林社區","x":120.229417368,"y":23.1855983688,"manhole":"MHC04c","reason":"淹水感測器附近，淹水事件"},{"no":"7","dept":"水工科","district":"麻豆區","address":"麻柚抽水站前池上游","x":120.2289259,"y":23.1805021,"manhole":"NC2","reason":"抽水站上游"},{"no":"8","dept":"水工科","district":"大內區","address":"石城里石子瀨32號之2號","x":120.358619,"y":23.123858,"manhole":"BR070-1","reason":"淹水感測器附近"},{"no":"9","dept":"水工科","district":"佳里區","address":"仁愛路307號","x":120.179681,"y":23.153532,"manhole":"GR108","reason":"幹線結點"},{"no":"10","dept":"水工科","district":"學甲區","address":"中華路三段(學甲國中圍牆旁)","x":120.185012,"y":23.239144,"manhole":"2084284-01","reason":"抽水站上游"},{"no":"11","dept":"水利行政科","district":"新營區","address":"延平路140巷","x":120.313149,"y":23.299046,"manhole":"A33","reason":"抽水站上游"},{"no":"12","dept":"水利行政科","district":"新營區","address":"新進路與222巷","x":120.320210845,"y":23.3025941829,"manhole":"A12","reason":"抽水站上游"},{"no":"13","dept":"水利行政科","district":"新營區","address":"民生路與三民路交叉口","x":120.309026,"y":23.305988,"manhole":"F12","reason":"其他(請敘明)"},{"no":"14","dept":"水養科","district":"永康區","address":"中正北路及竹林街口","x":120.246542,"y":23.041622,"manhole":"VR1016-R2","reason":"治理工程效益"},{"no":"15","dept":"水養科","district":"永康區","address":"永華路與永平街交叉口","x":120.258754,"y":23.022182,"manhole":"1645-08","reason":"治理工程效益"},{"no":"16","dept":"水養科","district":"永康區","address":"鹽和街292號前","x":120.233106205,"y":23.0368618577,"manhole":"1347-09","reason":"治理工程效益"},{"no":"17","dept":"團隊規劃","district":"楠西區","address":"中正路與中山路口","x":120.485619,"y":23.17234719,"manhole":"PR002","reason":"B幹線"},{"no":"18","dept":"團隊規劃","district":"楠西區","address":"水庫路(中油楠西站東側)","x":120.488439413,"y":23.1712232671,"manhole":"PR037","reason":"E幹線"},{"no":"19","dept":"團隊規劃","district":"永康區","address":"崑大路與大灣路1102巷","x":120.2506041,"y":22.99866363,"manhole":"1540-F4","reason":"A幹線"},{"no":"20","dept":"團隊規劃","district":"新市區","address":"民生路230號","x":120.2863606,"y":23.08092024,"manhole":"2055-08","reason":"A幹線"},{"no":"21","dept":"團隊規劃","district":"永康區","address":"中華路283號","x":120.234718,"y":23.007308,"manhole":"VR002","reason":"淹水感測器附近，淹水事件"},{"no":"22","dept":"團隊規劃","district":"南區","address":"萬年路167號前路段","x":120.185023788,"y":22.9344111735,"manhole":"CSR874","reason":"淹水感測器附近，淹水事件"},{"no":"23","dept":"團隊規劃","district":"中西區","address":"民生路與海安路","x":120.196466,"y":22.995345,"manhole":"CWCR187","reason":"淹水事件"},{"no":"24","dept":"團隊規劃","district":"中西區","address":"臨安路與民權路","x":120.192607,"y":22.991113,"manhole":"CWCR220","reason":"淹水事件"},{"no":"25","dept":"團隊規劃","district":"北區","address":"西門路四段與小北路","x":120.206065318,"y":23.0063194268,"manhole":"CNR219","reason":"治水工程"},{"no":"26","dept":"團隊規劃","district":"安南區","address":"北安二街與北安二街1巷","x":120.206476,"y":23.035679,"manhole":"CANR0906","reason":"淹水事件"},{"no":"27","dept":"雨水下水道管理科","district":"安南區","address":"安豐六街與25巷","x":120.212823817,"y":23.0469073336,"manhole":"CANR1153","reason":"淹水事件"},{"no":"28","dept":"雨水下水道管理科","district":"安南區","address":"長和路一段823巷153弄","x":120.226970852,"y":23.0579617728,"manhole":"CANR0052","reason":"淹水事件"},{"no":"29","dept":"團隊規劃","district":"安南區","address":"頂安街與慶安路","x":120.213781,"y":23.04406,"manhole":"CANR1155-R3","reason":"淹水事件"},{"no":"30","dept":"團隊規劃","district":"北區","address":"臨安路與成功路","x":120.195108,"y":23.002129,"manhole":"CWCR420-1","reason":"淹水事件"},{"no":"31","dept":"團隊規劃","district":"北區","address":"長賢街與西門路","x":120.204186,"y":23.003555,"manhole":"CNR410","reason":"淹水事件"},{"no":"32","dept":"團隊規劃","district":"中西區","address":"中正路與金華路","x":120.193477,"y":22.994031,"manhole":"CWCR440","reason":"淹水事件"},{"no":"33","dept":"團隊規劃","district":"永康區","address":"埔園街與中山路","x":120.252829,"y":23.033343,"manhole":"1547-07","reason":"淹水事件"},{"no":"34","dept":"團隊規劃","district":"安南區","address":"海佃路一段與188巷","x":120.191513,"y":23.024661,"manhole":"CANR0945","reason":"淹水事件"},{"no":"35","dept":"團隊規劃","district":"安南區","address":"本原街一段97巷與167巷","x":120.1980102,"y":23.04951421,"manhole":"CANR1610-R5","reason":"淹水事件"},{"no":"36","dept":"團隊規劃","district":"新營區","address":"長榮路三段75號","x":120.2934057,"y":23.3058782,"manhole":"B11-9","reason":"淹水事件"},{"no":"37","dept":"雨水下水道管理科","district":"安南區","address":"安寧街與海佃路388巷","x":120.192756494,"y":23.0285956735,"manhole":"CANR0963","reason":"淹水事件"},{"no":"38","dept":"團隊規劃","district":"永康區","address":"大灣路與942巷","x":120.2548736,"y":22.99942995,"manhole":"1541-01","reason":"淹水事件"},{"no":"39","dept":"團隊規劃","district":"北區","address":"東豐路與前峰路","x":120.2150212,"y":23.00373425,"manhole":"CNR040-R3","reason":"淹水事件"},{"no":"40","dept":"團隊規劃","district":"北區","address":"文賢三街與文成路","x":120.1982596,"y":23.01272493,"manhole":"CNR327","reason":"淹水事件"},{"no":"41","dept":"團隊規劃","district":"永康區","address":"尚頂路與中正二街","x":120.230285,"y":23.02778848,"manhole":"1246-11","reason":"淹水事件"},{"no":"42","dept":"團隊規劃","district":"東區","address":"裕誠街與裕和五街","x":120.247117,"y":22.98992087,"manhole":"CER505","reason":"淹水事件"},{"no":"43","dept":"團隊規劃","district":"安南區","address":"安興街435巷與351巷","x":120.157187036,"y":23.0685098599,"manhole":" ","reason":"淹水事件"},{"no":"44","dept":"團隊規劃","district":"南區","address":"新興路與新興路461巷","x":120.189062742,"y":22.9750576644,"manhole":"CSR160","reason":"重點開發區"},{"no":"45","dept":"團隊規劃","district":"仁德區","address":"太子路與大發路","x":120.251207469,"y":22.991211337,"manhole":"RD024","reason":"模式點位"},{"no":"46","dept":"雨水下水道管理科","district":"仁德區","address":"德糖路與中正路二段","x":120.251898797,"y":22.9512645364,"manhole":"302020367271000-04","reason":"治水工程"},{"no":"47","dept":"團隊規劃","district":"楠西區","address":"民族路與中華路","x":120.482974824,"y":23.1788903837,"manhole":"PR002","reason":"A幹線"},{"no":"48","dept":"雨水下水道管理科","district":"中西區","address":"西湖街與頂美一街","x":120.183383924,"y":23.0035689932,"manhole":"CWCR061","reason":"淹水事件"},{"no":"49","dept":"水養科","district":"永康區","address":"新興街34巷與六合路71巷","x":120.229807462,"y":23.0108095913,"manhole":"1243-01","reason":"治理工程效益"},{"no":"50","dept":"水養科","district":"永康區","address":"正南三路與鹽信街","x":120.233474037,"y":23.0327844185,"manhole":"1347-15","reason":"治理工程效益"},{"no":"51","dept":"團隊規劃","district":"安南區","address":"公學路一段262巷","x":120.199281087,"y":23.0787672397,"manhole":"CANR1751","reason":"淹水感測器附近，淹水事件"},{"no":"52","dept":"團隊規劃","district":"善化區","address":"光復路368號旁道路","x":120.287247594,"y":23.1279879629,"manhole":"DR068","reason":"淹水感測器附近，淹水事件"},{"no":"53","dept":"團隊規劃","district":"北區","address":"長榮路五段和公園路交叉口","x":120.210876199,"y":23.0164988311,"manhole":"CNR199","reason":"淹水感測器附近，淹水事件"}];
 const MOV_ST = [{"no":"1","station":"仁德區-正07","address":"太子路394號前","x_twd":173642,"y_twd":2543532,"manhole":"67-2174239-001","reason":"鄰近已有雨水下水道監測站或治水工程已完成後已無積淹水情形發生","x":120.255195,"y":22.991466},{"no":"2","station":"永康區-正01","address":"正強街221號前","x_twd":173307,"y_twd":2547718,"manhole":"67-2164246-001","reason":"","x":120.251719,"y":23.02925},{"no":"3","station":"安南區-正36","address":"本原街三段234巷與安中路四段290巷交叉口","x_twd":165307,"y_twd":2550410,"manhole":"67-2064250-016","reason":"","x":120.173522,"y":23.05317},{"no":"4","station":"中西區-正04","address":"府連路15號前","x_twd":168970,"y_twd":2542486,"manhole":"CER936","reason":"","x":120.209682,"y":22.9818},{"no":"5","station":"安平區-正02","address":"安北路170之2號前","x_twd":163992,"y_twd":2544842,"manhole":"67-2054241-014","reason":"","x":120.161002,"y":23.002825},{"no":"6","station":"安平區-正01","address":"同平路與同平路127巷交叉口","x_twd":163193,"y_twd":2544099,"manhole":"67-2034240-056","reason":"","x":120.15325,"y":22.996074},{"no":"7","station":"新化區-正01","address":"信義路425號前","x_twd":178553,"y_twd":2548281,"manhole":"2347-024","reason":"","x":120.302874,"y":23.034568},{"no":"8","station":"鹽水區-正02","address":"中正路159號旁","x_twd":175035,"y_twd":2579594,"manhole":"IR031-R1","reason":"","x":120.267012,"y":23.317163}];
 
-const COLORS = {'一級':'#ef4444','二級':'#f97316','三級':'#eab308','四級':'#22c55e','非工措施':'#a855f7','未分類':'#94a3b8'};
-const BUF_ALPHA = {'一級':0.13,'二級':0.11,'三級':0.08,'四級':0.06,'非工措施':0.10,'未分類':0.06};
-const LVL_KEY = {'一級':'l1','二級':'l2','三級':'l3','四級':'l4','非工措施':'lx'};
+const COLORS={'一級':'#ef4444','二級':'#f97316','三級':'#eab308','四級':'#22c55e','非工措施':'#a855f7','未分類':'#94a3b8'};
+const BUF_ALPHA={'一級':0.13,'二級':0.11,'三級':0.08,'四級':0.06,'非工措施':0.10};
+const LVL_KEY={'一級':'l1','二級':'l2','三級':'l3','四級':'l4','非工措施':'lx'};
 
 const map = L.map('map',{zoomControl:true}).setView([23.05,120.22],11);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
-  attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
+  attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:19
 }).addTo(map);
 
-const groups = {l1:[],l2:[],l3:[],l4:[],lx:[],new:[],mov:[]};
-let bufOn=true, lblOn=true;
-const visible = {l1:true,l2:true,l3:true,l4:true,lx:true,new:true,mov:true};
+const groups={l1:[],l2:[],l3:[],l4:[],lx:[],new:[],mov:[]};
+let bufOn=true,lblOn=true;
+const visible={l1:true,l2:true,l3:true,l4:true,lx:true,new:true,mov:true};
 
-// Filter state
-let newFilterDist='', newFilterDept='';
-let movFilterSet = new Set(MOV_ST.map(s=>s.station));
-
-function showInfo(title, html) {
-  document.getElementById('ititle').textContent = title;
-  document.getElementById('ibody').innerHTML = html;
-  document.getElementById('ipanel').style.display = 'block';
+function showInfo(title,html){
+  document.getElementById('ic-title').textContent=title;
+  document.getElementById('ic-body').innerHTML=html;
+  document.getElementById('info-card').style.display='block';
+  // close sidebar on mobile after clicking
+  if(window.innerWidth<=700) closeSidebar();
 }
-function row(lbl,val) {
-  return val && val!=='nan' && val!=='0.0' && val!==''
-    ? `<div class="info-row"><div class="info-lbl">${lbl}</div><div class="info-val">${val}</div></div>` : '';
+function closeInfo(){ document.getElementById('info-card').style.display='none'; }
+function row(l,v){
+  return v&&v!=='nan'&&v!=='0.0'&&v!==''
+    ?`<div class="info-row"><div class="info-lbl">${l}</div><div class="info-val">${v}</div></div>`:'';
 }
 
-// ── Flood markers ──
-FLOOD.forEach(pt => {
-  const c = COLORS[pt.level]||'#94a3b8';
-  const grp = LVL_KEY[pt.level]||'l3';
-  const sz = pt.level==='一級'?10:pt.level==='二級'?9:8;
-  const icon = L.divIcon({
-    className:'',
-    html:`<div style="width:${sz*2}px;height:${sz*2}px;border-radius:50%;background:${c};border:2px solid rgba(255,255,255,0.5);box-shadow:0 0 6px ${c}88;cursor:pointer"></div>`,
-    iconSize:[sz*2,sz*2], iconAnchor:[sz,sz]
-  });
-  const m = L.marker([pt.y,pt.x],{icon,zIndexOffset:pt.level==='一級'?100:0}).addTo(map);
+// ── Flood ──
+FLOOD.forEach(pt=>{
+  const c=COLORS[pt.level]||'#94a3b8';
+  const grp=LVL_KEY[pt.level]||'l3';
+  const sz=pt.level==='一級'?10:pt.level==='二級'?9:8;
+  const icon=L.divIcon({className:'',html:`<div style="width:${sz*2}px;height:${sz*2}px;border-radius:50%;background:${c};border:2px solid rgba(255,255,255,.5);box-shadow:0 0 6px ${c}88;cursor:pointer"></div>`,iconSize:[sz*2,sz*2],iconAnchor:[sz,sz]});
+  const m=L.marker([pt.y,pt.x],{icon,zIndexOffset:pt.level==='一級'?100:0}).addTo(map);
   m.on('click',()=>showInfo(pt.name,
-    row('等級',`<span class="badge" style="background:${c}22;color:${c};border-color:${c}55">${pt.level}</span>`)+
+    row('等級',`<span class="ibadge" style="background:${c}22;color:${c};border-color:${c}55">${pt.level}</span>`)+
     row('項次',pt.no)+row('行政區',pt.district)+row('地點',pt.location)+
     row('淹水高度',pt.height!=='nan'?pt.height+' 公分':null)+
     row('積淹面積',pt.area!=='nan'&&pt.area!=='0.0'?pt.area+' ha':null)+
     row('座標',pt.x.toFixed(5)+', '+pt.y.toFixed(5))
   ));
-  const short = pt.name.length>8?pt.name.slice(0,8)+'…':pt.name;
-  const lbl = L.marker([pt.y,pt.x],{
-    icon:L.divIcon({className:'',html:`<div style="color:${c};text-shadow:0 0 4px #000,1px 1px 3px #000;font-size:10px;font-weight:700;white-space:nowrap;pointer-events:none">${short}</div>`,iconSize:[0,0],iconAnchor:[-sz-2,sz+2]}),
-    interactive:false,zIndexOffset:-100
-  }).addTo(map);
-  const circle = L.circle([pt.y,pt.x],{radius:500,color:c,weight:1,opacity:0.4,fillColor:c,fillOpacity:BUF_ALPHA[pt.level]||0.08}).addTo(map);
+  const short=pt.name.length>8?pt.name.slice(0,8)+'…':pt.name;
+  const lbl=L.marker([pt.y,pt.x],{icon:L.divIcon({className:'',html:`<div style="color:${c};text-shadow:0 0 4px #000,1px 1px 3px #000;font-size:10px;font-weight:700;white-space:nowrap;pointer-events:none">${short}</div>`,iconSize:[0,0],iconAnchor:[-sz-2,sz+2]}),interactive:false,zIndexOffset:-100}).addTo(map);
+  const circle=L.circle([pt.y,pt.x],{radius:500,color:c,weight:1,opacity:.4,fillColor:c,fillOpacity:BUF_ALPHA[pt.level]||0.08}).addTo(map);
   groups[grp].push({marker:m,label:lbl,circle});
 });
 
-// ── New station objects (with filter metadata) ──
-const newObjs = [];
-NEW_ST.forEach(st => {
-  const icon = L.divIcon({
-    className:'',
-    html:`<div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:14px solid #38bdf8;filter:drop-shadow(0 0 4px #38bdf888);cursor:pointer"></div>`,
-    iconSize:[16,14],iconAnchor:[8,14]
-  });
-  const m = L.marker([st.y,st.x],{icon,zIndexOffset:200}).addTo(map);
+// ── New stations ──
+const newObjs=[];
+NEW_ST.forEach(st=>{
+  const icon=L.divIcon({className:'',html:`<div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:14px solid #38bdf8;filter:drop-shadow(0 0 4px #38bdf888);cursor:pointer"></div>`,iconSize:[16,14],iconAnchor:[8,14]});
+  const m=L.marker([st.y,st.x],{icon,zIndexOffset:200}).addTo(map);
   m.on('click',()=>showInfo('▲ 建議新設測站',
     row('編號','No.'+st.no)+row('科室',st.dept)+row('行政區',st.district)+
     row('地址',st.address)+row('人孔編號',st.manhole)+row('監測緣由',st.reason)
   ));
-  const addrS = st.address.length>10?st.address.slice(0,10)+'…':st.address;
-  const lbl = L.marker([st.y,st.x],{
-    icon:L.divIcon({className:'',html:`<div style="color:#7dd3fc;text-shadow:0 0 4px #000,1px 1px 3px #000;font-size:10px;font-weight:700;white-space:nowrap;pointer-events:none">${addrS}</div>`,iconSize:[0,0],iconAnchor:[-10,14]}),
-    interactive:false,zIndexOffset:100
-  }).addTo(map);
-  const obj = {marker:m,label:lbl,data:st,active:true};
+  const aS=st.address.length>10?st.address.slice(0,10)+'…':st.address;
+  const lbl=L.marker([st.y,st.x],{icon:L.divIcon({className:'',html:`<div style="color:#7dd3fc;text-shadow:0 0 4px #000,1px 1px 3px #000;font-size:10px;font-weight:700;white-space:nowrap;pointer-events:none">${aS}</div>`,iconSize:[0,0],iconAnchor:[-10,14]}),interactive:false,zIndexOffset:100}).addTo(map);
+  const obj={marker:m,label:lbl,data:st,active:true};
   newObjs.push(obj);
   groups.new.push({marker:m,label:lbl});
 });
 
-// ── Move station objects ──
-const movObjs = [];
-MOV_ST.forEach(st => {
-  const icon = L.divIcon({
-    className:'',
-    html:`<div style="width:13px;height:13px;background:#fb923c;transform:rotate(45deg);border:2px solid rgba(255,255,255,0.5);box-shadow:0 0 6px #fb923c88;cursor:pointer;margin:2px"></div>`,
-    iconSize:[17,17],iconAnchor:[8,8]
-  });
-  const m = L.marker([st.y,st.x],{icon,zIndexOffset:200}).addTo(map);
+// ── Move stations ──
+const movObjs=[];
+MOV_ST.forEach(st=>{
+  const icon=L.divIcon({className:'',html:`<div style="width:13px;height:13px;background:#fb923c;transform:rotate(45deg);border:2px solid rgba(255,255,255,.5);box-shadow:0 0 6px #fb923c88;cursor:pointer;margin:2px"></div>`,iconSize:[17,17],iconAnchor:[8,8]});
+  const m=L.marker([st.y,st.x],{icon,zIndexOffset:200}).addTo(map);
   m.on('click',()=>showInfo('◆ 建議移設：'+st.station,
     row('測站',st.station)+row('地址',st.address)+
     row('人孔編號',st.manhole)+row('移站緣由',st.reason)+
     row('座標',st.x+', '+st.y)
   ));
-  const lbl = L.marker([st.y,st.x],{
-    icon:L.divIcon({className:'',html:`<div style="color:#fdba74;text-shadow:0 0 4px #000,1px 1px 3px #000;font-size:10px;font-weight:700;white-space:nowrap;pointer-events:none">${st.station}</div>`,iconSize:[0,0],iconAnchor:[-10,8]}),
-    interactive:false,zIndexOffset:100
-  }).addTo(map);
-  const obj = {marker:m,label:lbl,data:st,active:true};
+  const lbl=L.marker([st.y,st.x],{icon:L.divIcon({className:'',html:`<div style="color:#fdba74;text-shadow:0 0 4px #000,1px 1px 3px #000;font-size:10px;font-weight:700;white-space:nowrap;pointer-events:none">${st.station}</div>`,iconSize:[0,0],iconAnchor:[-10,8]}),interactive:false,zIndexOffset:100}).addTo(map);
+  const obj={marker:m,label:lbl,data:st,active:true};
   movObjs.push(obj);
   groups.mov.push({marker:m,label:lbl});
 });
 
 // ── Layer toggles ──
-function tog(key) {
-  visible[key] = !visible[key];
-  document.getElementById('b-'+key).classList.toggle('on', visible[key]);
-  groups[key].forEach(item => {
-    if (visible[key]) { item.marker.addTo(map); if(lblOn&&item.label) item.label.addTo(map); }
-    else { map.removeLayer(item.marker); if(item.label) map.removeLayer(item.label); }
-    if (item.circle) {
-      if (visible[key]&&bufOn) item.circle.addTo(map);
-      else map.removeLayer(item.circle);
-    }
+function tog(key){
+  visible[key]=!visible[key];
+  document.getElementById('b-'+key).classList.toggle('on',visible[key]);
+  groups[key].forEach(item=>{
+    if(visible[key]){item.marker.addTo(map);if(lblOn&&item.label)item.label.addTo(map);}
+    else{map.removeLayer(item.marker);if(item.label)map.removeLayer(item.label);}
+    if(item.circle){if(visible[key]&&bufOn)item.circle.addTo(map);else map.removeLayer(item.circle);}
   });
 }
-function togBuf() {
+function togBuf(){
   bufOn=!bufOn;
   document.getElementById('b-buf').classList.toggle('on',bufOn);
   Object.keys(groups).forEach(k=>groups[k].forEach(item=>{
-    if(!item.circle) return;
-    if(bufOn&&visible[k]) item.circle.addTo(map); else map.removeLayer(item.circle);
+    if(!item.circle)return;
+    if(bufOn&&visible[k])item.circle.addTo(map);else map.removeLayer(item.circle);
   }));
 }
-function togLabels() {
+function togLabels(){
   lblOn=!lblOn;
   document.getElementById('b-lbl').classList.toggle('on',lblOn);
   Object.keys(groups).forEach(k=>groups[k].forEach(item=>{
-    if(!item.label) return;
-    if(lblOn&&visible[k]) item.label.addTo(map); else map.removeLayer(item.label);
+    if(!item.label)return;
+    if(lblOn&&visible[k])item.label.addTo(map);else map.removeLayer(item.label);
   }));
 }
 
-// ── Filter panel toggle ──
-let fpOpen=true;
-function toggleFP() {
-  fpOpen=!fpOpen;
-  document.getElementById('fp-body').style.display=fpOpen?'flex':'none';
-  document.getElementById('fp-arrow').textContent=fpOpen?'▼':'▶';
+// ── Panel collapse ──
+const panelState={};
+function togglePanel(id){
+  const el=document.getElementById(id);
+  panelState[id]=panelState[id]===false?true:false;
+  el.classList.toggle('hidden',panelState[id]===false);
 }
 
-// ── New station filter ──
-function filterNew() {
-  newFilterDist = document.getElementById('sel-new-dist').value;
-  newFilterDept = document.getElementById('sel-new-dept').value;
-  let shown=0;
-  newObjs.forEach(obj => {
-    const st = obj.data;
-    const match = (!newFilterDist||st.district===newFilterDist) &&
-                  (!newFilterDept||st.dept===newFilterDept);
-    obj.active = match;
-    if (match && visible.new) {
-      obj.marker.addTo(map);
-      if(lblOn) obj.label.addTo(map);
-      shown++;
-    } else {
-      map.removeLayer(obj.marker);
-      map.removeLayer(obj.label);
-    }
+// ── Sidebar (mobile) ──
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('overlay');
+  const open=sb.classList.toggle('open');
+  ov.classList.toggle('show',open);
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+// ── Filter: New ──
+function filterNew(){
+  const dist=document.getElementById('sel-new-dist').value;
+  const dept=document.getElementById('sel-new-dept').value;
+  let n=0;
+  newObjs.forEach(o=>{
+    const ok=(!dist||o.data.district===dist)&&(!dept||o.data.dept===dept);
+    o.active=ok;
+    if(ok&&visible.new){o.marker.addTo(map);if(lblOn)o.label.addTo(map);n++;}
+    else{map.removeLayer(o.marker);map.removeLayer(o.label);}
   });
-  document.getElementById('new-count').textContent = shown;
-  document.getElementById('stat-new').textContent = shown;
+  document.getElementById('new-count').textContent=n;
 }
-
-function zoomNew() {
-  const active = newObjs.filter(o=>o.active);
-  if(!active.length) return;
-  if(active.length===1) {
-    map.setView([active[0].data.y,active[0].data.x],16,{animate:true});
-  } else {
-    const bounds = L.latLngBounds(active.map(o=>[o.data.y,o.data.x]));
-    map.fitBounds(bounds.pad(0.2),{animate:true,maxZoom:16});
-  }
+function zoomNew(){
+  const pts=newObjs.filter(o=>o.active);
+  if(!pts.length)return;
+  if(pts.length===1){map.setView([pts[0].data.y,pts[0].data.x],16,{animate:true});}
+  else{map.fitBounds(L.latLngBounds(pts.map(o=>[o.data.y,o.data.x])).pad(0.2),{animate:true,maxZoom:16});}
+  if(window.innerWidth<=700)closeSidebar();
 }
-
-function resetNew() {
+function resetNew(){
   document.getElementById('sel-new-dist').value='';
   document.getElementById('sel-new-dept').value='';
-  newFilterDist=''; newFilterDept='';
-  newObjs.forEach(obj=>{
-    obj.active=true;
-    if(visible.new) { obj.marker.addTo(map); if(lblOn) obj.label.addTo(map); }
-  });
+  newObjs.forEach(o=>{o.active=true;if(visible.new){o.marker.addTo(map);if(lblOn)o.label.addTo(map);}});
   document.getElementById('new-count').textContent=newObjs.length;
-  document.getElementById('stat-new').textContent=newObjs.length;
 }
 
-// ── Move station filter ──
-function filterMov() {
-  movFilterSet = new Set(
-    Array.from(document.querySelectorAll('#cb-mov input:checked')).map(c=>c.value)
-  );
-  let shown=0;
-  movObjs.forEach(obj=>{
-    const match = movFilterSet.has(obj.data.station);
-    obj.active=match;
-    if(match&&visible.mov) { obj.marker.addTo(map); if(lblOn) obj.label.addTo(map); shown++; }
-    else { map.removeLayer(obj.marker); map.removeLayer(obj.label); }
+// ── Filter: Move ──
+function filterMov(){
+  const sel=new Set(Array.from(document.querySelectorAll('#cb-mov input:checked')).map(c=>c.value));
+  let n=0;
+  movObjs.forEach(o=>{
+    const ok=sel.has(o.data.station);
+    o.active=ok;
+    if(ok&&visible.mov){o.marker.addTo(map);if(lblOn)o.label.addTo(map);n++;}
+    else{map.removeLayer(o.marker);map.removeLayer(o.label);}
   });
-  document.getElementById('mov-count').textContent=shown;
-  document.getElementById('stat-mov').textContent=shown;
+  document.getElementById('mov-count').textContent=n;
 }
-
-function zoomMov() {
-  const active = movObjs.filter(o=>o.active);
-  if(!active.length) return;
-  if(active.length===1) {
-    map.setView([active[0].data.y,active[0].data.x],16,{animate:true});
-  } else {
-    const bounds = L.latLngBounds(active.map(o=>[o.data.y,o.data.x]));
-    map.fitBounds(bounds.pad(0.3),{animate:true,maxZoom:16});
-  }
+function zoomMov(){
+  const pts=movObjs.filter(o=>o.active);
+  if(!pts.length)return;
+  if(pts.length===1){map.setView([pts[0].data.y,pts[0].data.x],16,{animate:true});}
+  else{map.fitBounds(L.latLngBounds(pts.map(o=>[o.data.y,o.data.x])).pad(0.3),{animate:true,maxZoom:16});}
+  if(window.innerWidth<=700)closeSidebar();
 }
-
-function resetMov() {
+function resetMov(){
   document.querySelectorAll('#cb-mov input').forEach(c=>c.checked=true);
-  movFilterSet = new Set(MOV_ST.map(s=>s.station));
-  movObjs.forEach(obj=>{
-    obj.active=true;
-    if(visible.mov) { obj.marker.addTo(map); if(lblOn) obj.label.addTo(map); }
-  });
+  movObjs.forEach(o=>{o.active=true;if(visible.mov){o.marker.addTo(map);if(lblOn)o.label.addTo(map);}});
   document.getElementById('mov-count').textContent=movObjs.length;
-  document.getElementById('stat-mov').textContent=movObjs.length;
 }
+
+// Invalidate map size on sidebar transition
+document.getElementById('sidebar').addEventListener('transitionend',()=>map.invalidateSize());
 </script>
 </body>
 </html>
